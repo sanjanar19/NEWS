@@ -1,0 +1,6 @@
+news-aggregator/app/__pycache__
+venv
+news-aggregator/app/services/__pycache__
+news-aggregator/app/models/__pycache__
+news-aggregator/app/utils/__pycache__
+news-aggregator/app/api/__pycache__
