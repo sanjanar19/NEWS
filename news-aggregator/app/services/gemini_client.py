@@ -20,7 +20,7 @@ class GeminiClient:
     def __init__(self):
         self.api_key = settings.gemini_api_key
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
-        self.model = settings.gemini_model
+        self.model = "gemini-2.0-flash"  # Update from gemini-pro to gemini-2.0-flash
         self.timeout = settings.request_timeout
         
     async def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -138,6 +138,37 @@ class GeminiClient:
                 error=str(e)
             )
             raise
+    
+    async def analyze_content(self, articles: List[Dict], query: str) -> Dict[str, Any]:
+        """
+        Comprehensive AI analysis:
+        1. Extract key components
+        2. Identify viewpoint differences
+        3. Generate balanced summary
+        4. Calculate confidence scores
+        """
+        prompt = self._construct_analysis_prompt(articles, query)
+        
+        try:
+            response = await self._get_gemini_response(prompt)
+            return self._structure_analysis(response, articles)
+        except Exception as e:
+            logger.error(f"Gemini analysis failed: {str(e)}")
+            return self._create_fallback_analysis(articles)
+    
+    def _construct_analysis_prompt(self, articles: List[Dict], query: str) -> str:
+        """Construct detailed prompt for analysis"""
+        return f"""
+        Analyze these news articles about '{query}' and provide:
+        1. Key points with their frequency across sources
+        2. Main viewpoints and any conflicts
+        3. Timeline of events
+        4. Source reliability assessment
+        5. Confidence score for each insight
+        
+        Articles:
+        {self._format_articles_for_prompt(articles)}
+        """
     
     def _prepare_article_content(self, articles: List[ArticleSource]) -> str:
         """Prepare article content for AI analysis."""
@@ -334,36 +365,14 @@ Respond in this exact JSON format:
         
         summary = content[:500] + "..." if len(content) > 500 else content
         if not summary.strip():
-            summary = f"Analysis of recent news articles covering the requested topic. {len(articles)} articles were processed from various sources."
+            summary = f"Analysis of recent news articles covering the requested topic. {len(articles)} articles were processed "
         
         return {
             "summary": summary,
             "insights": basic_insights,
             "source_analysis": {},
             "timeline_events": [],
-            "confidence_score": 0.6,
+            "confidence_score": 0.5,
             "coverage_assessment": "partial",
             "conflicting_viewpoints": False
         }
-    
-    async def health_check(self) -> bool:
-        """Check if Gemini API is accessible."""
-        
-        try:
-            # Make a minimal request to test connectivity
-            payload = {
-                "contents": [{
-                    "parts": [{"text": "Test connection. Respond with 'OK'."}]
-                }],
-                "generationConfig": {
-                    "maxOutputTokens": 10,
-                    "temperature": 0
-                }
-            }
-            
-            await self._make_request(f"models/{self.model}:generateContent", payload)
-            return True
-            
-        except Exception as e:
-            logger.error("Gemini health check failed", error=str(e))
-            return False

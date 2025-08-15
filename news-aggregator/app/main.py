@@ -13,6 +13,8 @@ from app.utils.logger import configure_logging, get_logger, log_api_request, log
 from app.utils.exceptions import NewsAggregatorException, ExternalAPIError
 from app.api.routes import router
 from app.models.response_models import ErrorResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 # Configure logging
 configure_logging()
@@ -55,10 +57,14 @@ app = FastAPI(
     redoc_url="/redoc" if settings.debug else None,
 )
 
+# Mount static files and templates
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+templates = Jinja2Templates(directory="app/static")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],  # IMPORTANT: Configure this more securely for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -200,16 +206,11 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(router, prefix="/api/v1")
 
 
-# Root endpoint
+# Serve HTML at root
 @app.get("/")
-async def root():
+async def root(request: Request):
     """Root endpoint with basic API information."""
-    return {
-        "name": settings.app_name,
-        "version": settings.app_version,
-        "status": "healthy",
-        "docs_url": "/docs" if settings.debug else "disabled"
-    }
+    return templates.TemplateResponse("index.html", {"request": request})
 
 
 # Health check endpoint

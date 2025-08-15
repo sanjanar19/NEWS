@@ -1,0 +1,45 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.search-form {
+  margin: 20px 0;
+  display: flex;
+  gap: 10px;
+}
+
+#searchQuery {
+  flex: 1;
+  padding: 10px;
+  font-size: 16px;
+}
+
+button {
+  padding: 10px 20px;
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+}
+
+.hidden {
+  display: none;
+}
+
+.results {
+  margin-top: 20px;
+}
+
+.error {
+  color: red;
+  padding: 20px;
+  background-color: #fff3f3;
+  border: 1px solid #ffcdd2;
+}

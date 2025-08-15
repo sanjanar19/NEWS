@@ -12,7 +12,7 @@ from app.services.content_processor import ContentProcessor
 from app.services.analysis_engine import AnalysisEngine
 from app.models.response_models import (
     SearchResponse, ArticleSource, ComponentInsight,
-    SourceContribution, TimelinePoint, ChartData
+    SourceContribution, TimelinePoint, ChartData, VisualizationData
 )
 from app.utils.logger import get_logger
 from app.utils.exceptions import NewsAggregatorException, ContentProcessingError
@@ -34,25 +34,19 @@ class SearchController:
     async def process_search_request(
         self,
         query: str,
-        max_articles: int,
-        time_range: str,
-        include_sources: Optional[List[str]] = None,
-        exclude_sources: Optional[List[str]] = None
+        max_articles: int = 5,
+        exclude_sources: Optional[List[str]] = None,
+        time_range: Optional[str] = None  # Add time_range parameter
     ) -> SearchResponse:
         """
-        Process complete search request through the entire AI-powered pipeline.
+        Process search request with enhanced visualization.
         
         Args:
             query: Search query string
-            max_articles: Maximum articles to process
-            time_range: Time range for search
-            include_sources: Sources to include
-            exclude_sources: Sources to exclude
-            
-        Returns:
-            Complete SearchResponse with AI analysis
+            max_articles: Maximum number of articles to process
+            exclude_sources: List of sources to exclude
+            time_range: Time range filter (e.g., '24h', '7d', '30d')
         """
-        
         start_time = time.time()
         
         logger.info(
@@ -67,15 +61,14 @@ class SearchController:
             raw_articles = await self._collect_articles(
                 query=query,
                 max_articles=max_articles,
-                time_range=time_range,
-                include_sources=include_sources,
-                exclude_sources=exclude_sources
+                exclude_sources=exclude_sources,
+                time_range=time_range  # Pass time_range to collection
             )
             
             if not raw_articles:
                 raise ContentProcessingError(
                     "No articles found for the given query and filters",
-                    details={"query": query, "time_range": time_range}
+                    details={"query": query}
                 )
             
             # Phase 2: Enhanced Content Processing
@@ -98,20 +91,52 @@ class SearchController:
             
             processing_time = (time.time() - start_time) * 1000
             
+            # Prepare key insights as strings
+            key_insights = [insight.point for insight in enhanced_analysis["insights"]]
+
+            # Prepare visualization data
+            source_breakdown = {}
+            source_counts = collections.Counter(article.source_name or article.source_domain for article in processed_articles)
+            total_articles = len(processed_articles)
+            for source, count in source_counts.most_common():
+                source_breakdown[source] = (count / total_articles) * 100
+            
+            # Prepare timeline events
+            timeline_events = []
+            for article in processed_articles:
+                if article.published_at:
+                    timeline_events.append({
+                        "timestamp": article.published_at.isoformat(),
+                        "title": article.title,
+                        "source": article.source_name or article.source_domain,
+                        "relevance": 0.8  # Default relevance score
+                    })
+            
+            # Prepare component frequencies
+            component_frequencies = {}
+            if "component_analysis" in enhanced_analysis:
+                component_frequencies = enhanced_analysis["component_analysis"]
+            
+            # Prepare reliability scores
+            reliability_scores = {}
+            for article in processed_articles:
+                reliability_scores[article.source_name or article.source_domain] = 0.75  # Default score
+            
             # Construct comprehensive response
             response = SearchResponse(
                 query=query,
-                processing_time_ms=round(processing_time, 2),
-                articles_processed=len(processed_articles),
                 summary=enhanced_analysis["summary"],
-                key_insights=enhanced_analysis["insights"],
-                source_breakdown=chart_data["source_breakdown"],
-                timeline=chart_data["timeline"],
-                sources_used=processed_articles[:10],
-                total_sources=len(set(article.source_domain for article in processed_articles)),
-                date_range=self._calculate_date_range(processed_articles),
+                key_insights=key_insights,
+                articles_processed=len(processed_articles),
+                processing_time_ms=round(processing_time, 2),
                 analysis_confidence=enhanced_analysis["confidence_score"],
-                coverage_score=enhanced_analysis.get("coverage_metrics", {}).get("source_diversity_score", 0.7)
+                coverage_score=enhanced_analysis.get("coverage_metrics", {}).get("source_diversity_score", 0.7),
+                visualization_data=VisualizationData(
+                    source_breakdown=source_breakdown,
+                    timeline=timeline_events,
+                    component_frequencies=component_frequencies,
+                    reliability_scores=reliability_scores
+                )
             )
             
             logger.info(
@@ -139,22 +164,34 @@ class SearchController:
         self,
         query: str,
         max_articles: int,
-        time_range: str,
-        include_sources: Optional[List[str]],
-        exclude_sources: Optional[List[str]]
+        include_sources: Optional[List[str]] = None,
+        exclude_sources: Optional[List[str]] = None,
+        time_range: Optional[str] = None
     ) -> List[ArticleSource]:
-        """Collect articles from all available sources."""
+        """
+        Collect articles from all available sources.
         
-        logger.info("Collecting articles from sources", sources=["tavily"])
+        Args:
+            query: Search query string
+            max_articles: Maximum number of articles
+            include_sources: List of sources to include
+            exclude_sources: List of sources to exclude
+            time_range: Time range filter for articles
+        """
+        logger.info(
+            "Collecting articles from sources", 
+            sources=["tavily"],
+            time_range=time_range
+        )
         
         try:
             # Primary source: Tavily
             tavily_articles = await self.tavily_client.search_news(
                 query=query,
-                max_results=settings.tavily_max_results,  # Use configured max results
-                time_range=time_range,
+                max_results=settings.tavily_max_results,
                 include_sources=include_sources,
-                exclude_sources=exclude_sources
+                exclude_sources=exclude_sources,
+                time_range=time_range  # Pass time_range to Tavily client
             )
             
             # Note: In Phase 4, we'll add Brave API as secondary source
@@ -394,50 +431,55 @@ Additionally, {len(quality_sources)} articles were identified from high-quality 
         # Source breakdown chart
         source_counts = collections.Counter(article.source_name or article.source_domain for article in articles)
         total_articles = len(articles)
-        source_chart_data = []
+        
+        # Create source breakdown data as dictionary
+        source_breakdown_data = {
+            "labels": [],
+            "values": [],
+            "colors": []
+        }
         
         for source, count in source_counts.most_common():
             contribution = (count / total_articles) * 100
-            source_chart_data.append(SourceContribution(
-                source=source,
-                contribution=round(contribution, 1),
-                articles_count=count,
-                reliability_score=None
-            ))
+            source_breakdown_data["labels"].append(source)
+            source_breakdown_data["values"].append(round(contribution, 1))
+            source_breakdown_data["colors"].append("#" + hex(hash(source) % 16777215)[2:].zfill(6))
         
-        # Timeline chart
+        # Timeline chart data as dictionary
         timeline_data = collections.defaultdict(int)
         for article in articles:
             if article.published_at:
                 hour_key = article.published_at.replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
-                timeline_data[hour_key] += 1
+                timeline_data[hour_key.isoformat()] += 1
         
-        timeline_chart_data = []
-        for timestamp, count in sorted(timeline_data.items()):
-            timeline_chart_data.append(TimelinePoint(
-                timestamp=timestamp.isoformat(),
-                article_count=count,
-                key_events=None
-            ))
+        # Sort timeline data
+        sorted_timeline = dict(sorted(timeline_data.items()))
         
-        # Enhance with AI analysis timeline events if available
+        timeline_chart_data = {
+            "timestamps": list(sorted_timeline.keys()),
+            "counts": list(sorted_timeline.values()),
+            "events": []
+        }
+        
+        # Add AI analysis timeline events if available
         if "timeline_events" in enhanced_analysis and enhanced_analysis["timeline_events"]:
             for event in enhanced_analysis["timeline_events"]:
-                for point in timeline_chart_data:
-                    # Simple matching, could be more robust
-                    if point.timestamp.startswith(event["timestamp"]):
-                        point.key_events = event["event_summary"]
+                timeline_chart_data["events"].append({
+                    "timestamp": event["timestamp"],
+                    "title": event["event_summary"],
+                    "source": event.get("source", "unknown")
+                })
         
         return {
             "source_breakdown": ChartData(
                 chart_type="bar",
-                data=[sc.dict() for sc in source_chart_data],  # <-- fix here
+                data=source_breakdown_data,
                 metadata={"total_sources": len(source_counts)}
             ),
             "timeline": ChartData(
                 chart_type="timeline",
                 data=timeline_chart_data,
-                metadata={"total_timepoints": len(timeline_chart_data)}
+                metadata={"total_timepoints": len(sorted_timeline)}
             )
         }
     

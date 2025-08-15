@@ -7,7 +7,7 @@ import re
 
 
 class SearchRequest(BaseModel):
-    """Model for news search requests."""
+    """Search request parameters"""
 
     query: str = Field(
         ...,
@@ -16,8 +16,8 @@ class SearchRequest(BaseModel):
         description="Search query for news articles"
     )
 
-    max_articles: Optional[int] = Field(
-        20,
+    max_articles: int = Field(
+        5,
         ge=5,
         le=50,
         description="Maximum number of articles to process (5-50)"
@@ -34,7 +34,7 @@ class SearchRequest(BaseModel):
     )
 
     time_range: Optional[str] = Field(
-        "24h",
+        None,
         description="Time range for articles: 1h, 6h, 24h, 48h, 7d"
     )
 

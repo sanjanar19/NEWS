@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>News Aggregator</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header>
+        <h1>News Aggregator</h1>
+      </header>
+
+      <!-- Main Content -->
+      <main>
+        <!-- Search Section -->
+        <section class="search-section">
+          <div class="search-container">
+            <h2>Search News</h2>
+            <form id="searchForm" class="search-form">
+              <input
+                type="text"
+                id="searchQuery"
+                placeholder="Enter a topic to search..."
+                required
+              />
+              <button type="submit" class="btn btn-primary">Search News</button>
+            </form>
+          </div>
+        </section>
+
+        <div id="loading" class="loading hidden">Searching news...</div>
+
+        <div id="results" class="results">
+          <!-- Results will appear here -->
+        </div>
+
+        <div id="error" class="error hidden">
+          <!-- Errors will appear here -->
+        </div>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

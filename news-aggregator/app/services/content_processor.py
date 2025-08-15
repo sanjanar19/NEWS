@@ -6,6 +6,7 @@ import html
 from typing import List, Dict, Any, Optional, Set, Tuple
 from datetime import datetime, timezone
 from urllib.parse import urlparse
+from collections import Counter
 
 from app.models.response_models import ArticleSource
 from app.utils.logger import get_logger
@@ -428,3 +429,76 @@ class ContentProcessor:
                     return True
         
         return False
+
+    """Advanced content analysis and component breakdown"""
+    
+    def analyze_components(self, articles: List[Dict]) -> Dict[str, Any]:
+        """
+        Perform comprehensive component analysis:
+        - Extract and group key points
+        - Calculate frequencies
+        - Generate timeline data
+        - Analyze source distribution
+        """
+        components = self._extract_key_points(articles)
+        frequencies = self._calculate_frequencies(components)
+        timeline = self._generate_timeline(articles)
+        source_analysis = self._analyze_sources(articles)
+        
+        return {
+            "components": components,
+            "frequencies": frequencies,
+            "timeline": timeline,
+            "source_analysis": source_analysis
+        }
+    
+    def _extract_key_points(self, articles: List[Dict]) -> List[Dict]:
+        """Extract and categorize key points from articles"""
+        points = []
+        for article in articles:
+            # Extract sentences that represent key information
+            # Group similar points
+            # Assign categories (event, opinion, fact, etc.)
+            pass  # Implementation here
+        return points
+    
+    def _calculate_frequencies(self, components: List[Dict]) -> Dict[str, int]:
+        """Calculate frequency and distribution of key points"""
+        frequencies = Counter()
+        for component in components:
+            frequencies[component['point']] += 1
+        return dict(frequencies)
+    
+    def _generate_timeline(self, articles: List[Dict]) -> List[Dict]:
+        """Generate timeline data for visualization"""
+        timeline = []
+        for article in articles:
+            publish_time = article.get('published_at')
+            if publish_time:
+                timeline.append({
+                    'time': publish_time,
+                    'event': article.get('title'),
+                    'source': article.get('source')
+                })
+        return sorted(timeline, key=lambda x: x['time'])
+    
+    def _analyze_sources(self, articles: List[Dict]) -> Dict[str, Any]:
+        """Analyze source distribution and reliability"""
+        source_distribution = Counter()
+        reliability_scores = []
+        
+        for article in articles:
+            domain = article.get('source_domain')
+            if domain:
+                source_distribution[domain] += 1
+                # Assume reliability score is available in article metadata
+                score = article.get('reliability_score', 0.5)
+                reliability_scores.append(score)
+        
+        # Calculate average reliability score
+        avg_reliability = sum(reliability_scores) / len(reliability_scores) if reliability_scores else 0
+        
+        return {
+            "source_distribution": dict(source_distribution),
+            "average_reliability": avg_reliability
+        }

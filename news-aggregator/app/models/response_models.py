@@ -18,7 +18,7 @@ class ArticleSource(BaseModel):
 
 
 class ComponentInsight(BaseModel):
-    """Model for component analysis insights."""
+    """Represents a key insight with frequency analysis"""
     
     point: str = Field(..., description="Key insight or bullet point")
     frequency: int = Field(..., ge=1, description="Number of sources mentioning this point")
@@ -45,36 +45,51 @@ class TimelinePoint(BaseModel):
 
 
 class ChartData(BaseModel):
-    """Model for chart visualization data."""
+    """Base chart data structure"""
     
     chart_type: str = Field(..., description="Type of chart (bar, timeline, pie)")
-    data: List[Dict[str, Any]] = Field(..., description="Chart data points")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional chart metadata")
+    data: Dict[str, Any] = Field(..., description="Chart data points")
+    metadata: Dict[str, Any] = Field(..., description="Additional chart metadata")
+
+
+class TimelineEvent(BaseModel):
+    """Single timeline event"""
+    
+    timestamp: datetime = Field(..., description="Timestamp of the event")
+    title: str = Field(..., description="Title or description of the event")
+    source: str = Field(..., description="Source of the event")
+    relevance: float = Field(..., ge=0.0, le=1.0, description="Relevance score of the event")
+
+
+class ArticleMetrics(BaseModel):
+    """Article-level metrics and analysis"""
+    
+    source_reliability: float = Field(..., description="Reliability of the source")
+    publish_time: datetime = Field(..., description="Publication time of the article")
+    relevance_score: float = Field(..., description="Relevance score of the article")
+    content_overlap: float = Field(..., description="Content overlap with other articles")
+
+
+class VisualizationData(BaseModel):
+    """Combined visualization data"""
+    
+    source_breakdown: Dict[str, float] = Field(..., description="Distribution of articles by source")
+    timeline: List[TimelineEvent] = Field(..., description="Timeline of article publications")
+    component_frequencies: Dict[str, int] = Field(..., description="Frequencies of components")
+    reliability_scores: Dict[str, float] = Field(..., description="Reliability scores of sources")
 
 
 class SearchResponse(BaseModel):
-    """Model for complete search analysis response."""
+    """Enhanced search response with component analysis"""
     
     query: str = Field(..., description="Original search query")
-    processing_time_ms: float = Field(..., ge=0, description="Processing time in milliseconds")
-    articles_processed: int = Field(..., ge=0, description="Total number of articles processed")
-    
-    # Main Analysis Results
     summary: str = Field(..., description="Comprehensive news summary")
-    key_insights: List[ComponentInsight] = Field(..., description="Key insights with frequency analysis")
-    
-    # Visualization Data
-    source_breakdown: ChartData = Field(..., description="Source contribution chart data")
-    timeline: ChartData = Field(..., description="Timeline chart data")
-    
-    # Additional Data
-    sources_used: List[ArticleSource] = Field(..., description="List of articles processed")
-    total_sources: int = Field(..., ge=0, description="Total number of unique sources")
-    date_range: str = Field(..., description="Date range of processed articles")
-    
-    # Quality Metrics
+    key_insights: List[str] = Field(..., description="Key insights")
+    articles_processed: int = Field(..., ge=0, description="Total number of articles processed")
+    processing_time_ms: float = Field(..., ge=0, description="Processing time in milliseconds")
     analysis_confidence: float = Field(..., ge=0.0, le=1.0, description="Overall analysis confidence")
-    coverage_score: float = Field(..., ge=0.0, le=1.0, description="Topic coverage score")
+    coverage_score: float = Field(..., ge=0.0, le=1.0, description="Coverage score of the response")
+    visualization_data: VisualizationData = Field(..., description="Data for generating visualizations")
 
 
 class ErrorResponse(BaseModel):
