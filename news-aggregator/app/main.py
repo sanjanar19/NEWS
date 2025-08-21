@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse # Import HTMLResponse
 from datetime import datetime
 
 from app.config import settings
@@ -207,9 +207,9 @@ app.include_router(router, prefix="/api/v1")
 
 
 # Serve HTML at root
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Root endpoint with basic API information."""
+    """Root endpoint to serve the main HTML page."""
     return templates.TemplateResponse("index.html", {"request": request})
 
 

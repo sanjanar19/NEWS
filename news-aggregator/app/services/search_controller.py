@@ -466,7 +466,7 @@ Additionally, {len(quality_sources)} articles were identified from high-quality 
             for event in enhanced_analysis["timeline_events"]:
                 timeline_chart_data["events"].append({
                     "timestamp": event["timestamp"],
-                    "title": event["event_summary"],
+                    "title": event["event"],
                     "source": event.get("source", "unknown")
                 })
         
