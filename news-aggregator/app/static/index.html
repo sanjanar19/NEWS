@@ -18,7 +18,7 @@
         padding: 2rem;
       }
       .container {
-        max-width: 900px;
+        max-width: 1200px;
         margin: auto;
       }
       .hidden {
@@ -58,6 +58,7 @@
       h2,
       h3 {
         color: #1a202c;
+        margin-top: 0;
       }
       .results-header {
         margin-bottom: 2rem;
@@ -77,20 +78,58 @@
       }
       .charts-container {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         gap: 1.5rem;
         margin-top: 1.5rem;
+      }
+      @media (min-width: 768px) {
+        .charts-container {
+          grid-template-columns: 1fr 1fr;
+        }
       }
       .chart-card {
         background-color: white;
         border-radius: 12px;
         padding: 1.5rem;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        position: relative;
+      }
+      .chart-card h3 {
+        margin-bottom: 1rem;
+        text-align: center;
+      }
+      /* FIX: Proper chart container sizing */
+      .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+      }
+      .chart-container canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
       }
       #loadingState,
       #errorState {
         text-align: center;
         padding: 2rem;
+      }
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 2s linear infinite;
+        margin: 0 auto 1rem;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
       }
     </style>
   </head>
@@ -101,14 +140,15 @@
         <input
           type="text"
           id="searchQuery"
-          placeholder="Enter a news topic..."
+          placeholder="Enter a news topic (e.g., AI breakthroughs, climate change, tech stocks)..."
           required
         />
         <button type="submit">Analyze</button>
       </form>
 
       <div id="loadingState" class="hidden">
-        <p>Analyzing news... Please wait.</p>
+        <div class="spinner"></div>
+        <p>Analyzing news articles and generating insights... Please wait.</p>
       </div>
 
       <div id="errorState" class="hidden">
@@ -119,9 +159,298 @@
       <div id="results" class="hidden"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-date-fns/2.0.0/chartjs-adapter-date-fns.bundle.min.js"></script>
 
-    <script src="/static/app.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const searchForm = document.getElementById("searchForm");
+        const loadingState = document.getElementById("loadingState");
+        const results = document.getElementById("results");
+        const errorState = document.getElementById("errorState");
+        const errorMessage = document.getElementById("errorMessage");
+
+        // To keep track of chart instances and destroy them before redrawing
+        let sourceChartInstance = null;
+        let timelineChartInstance = null;
+
+        searchForm.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          const query = document.getElementById("searchQuery").value;
+
+          // Show loading state and hide previous results/errors
+          loadingState.classList.remove("hidden");
+          results.classList.add("hidden");
+          errorState.classList.add("hidden");
+          results.innerHTML = ""; // Clear previous results
+
+          try {
+            const response = await fetch(
+              "http://127.0.0.1:8000/api/v1/search",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: query, max_articles: 10 }),
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(data.message || "Failed to fetch results");
+            }
+
+            // Hide loading, show results
+            loadingState.classList.add("hidden");
+            results.classList.remove("hidden");
+
+            displayResults(query, data);
+          } catch (error) {
+            console.error("Error:", error);
+            loadingState.classList.add("hidden");
+            errorState.classList.remove("hidden");
+            errorMessage.textContent = error.message;
+          }
+        });
+
+        function displayResults(query, data) {
+          // Inject the main results HTML structure, including the chart containers
+          results.innerHTML = `
+              <div class="results-header">
+                  <h2>Results for "${query}"</h2>
+                  <div class="results-meta">
+                      <span><i class="fas fa-file-alt"></i> ${
+                        data.articles_processed || 0
+                      } articles analyzed</span>
+                      <span><i class="fas fa-chart-line"></i> Confidence: ${Math.round(
+                        (data.analysis_confidence || 0) * 100
+                      )}%</span>
+                  </div>
+              </div>
+              <div class="card">
+                  <h3><i class="fas fa-file-alt"></i> Summary</h3>
+                  <p>${data.summary || "No summary available"}</p>
+              </div>
+              <div class="card">
+                  <h3><i class="fas fa-lightbulb"></i> Key Insights</h3>
+                  <div class="insights-list">
+                      ${(data.key_insights || [])
+                        .map(
+                          (insight) =>
+                            `<div><i class="fas fa-arrow-right"></i> ${insight}</div>`
+                        )
+                        .join("")}
+                  </div>
+              </div>
+              <div class="charts-container">
+                  <div class="chart-card">
+                      <h3><i class="fas fa-chart-bar"></i> Source Distribution</h3>
+                      <div class="chart-container">
+                          <canvas id="sourceBreakdownChart"></canvas>
+                      </div>
+                  </div>
+                  <div class="chart-card">
+                      <h3><i class="fas fa-clock"></i> Publication Timeline</h3>
+                      <div class="chart-container">
+                          <canvas id="publicationTimelineChart"></canvas>
+                      </div>
+                  </div>
+              </div>
+          `;
+
+          // Render the charts using the visualization data
+          setTimeout(() => {
+            renderCharts(data.visualization_data || {});
+          }, 100); // Small delay to ensure DOM is ready
+        }
+
+        function renderCharts(visData) {
+          // Destroy previous charts if they exist to prevent conflicts
+          if (sourceChartInstance) {
+            sourceChartInstance.destroy();
+            sourceChartInstance = null;
+          }
+          if (timelineChartInstance) {
+            timelineChartInstance.destroy();
+            timelineChartInstance = null;
+          }
+
+          // 1. Source Breakdown Chart (Bar Graph)
+          const sourceCanvas = document.getElementById("sourceBreakdownChart");
+          if (sourceCanvas) {
+            const sourceCtx = sourceCanvas.getContext("2d");
+            const sourceData = visData.source_breakdown || {};
+
+            if (Object.keys(sourceData).length > 0) {
+              sourceChartInstance = new Chart(sourceCtx, {
+                type: "bar",
+                data: {
+                  labels: Object.keys(sourceData),
+                  datasets: [
+                    {
+                      label: "% of Articles",
+                      data: Object.values(sourceData),
+                      backgroundColor: "rgba(54, 162, 235, 0.6)",
+                      borderColor: "rgba(54, 162, 235, 1)",
+                      borderWidth: 2,
+                      borderRadius: 4,
+                    },
+                  ],
+                },
+                options: {
+                  indexAxis: "y", // Horizontal bar chart
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: function (context) {
+                          return `${
+                            context.dataset.label
+                          }: ${context.raw.toFixed(1)}%`;
+                        },
+                      },
+                    },
+                  },
+                  scales: {
+                    x: {
+                      beginAtZero: true,
+                      title: {
+                        display: true,
+                        text: "Percentage (%)",
+                      },
+                      grid: {
+                        color: "rgba(0, 0, 0, 0.1)",
+                      },
+                    },
+                    y: {
+                      grid: {
+                        display: false,
+                      },
+                    },
+                  },
+                },
+              });
+            } else {
+              sourceCtx.font = "16px Arial";
+              sourceCtx.textAlign = "center";
+              sourceCtx.fillText(
+                "No source data available",
+                sourceCanvas.width / 2,
+                sourceCanvas.height / 2
+              );
+            }
+          }
+
+          // 2. Publication Timeline (Line Graph)
+          const timelineCanvas = document.getElementById(
+            "publicationTimelineChart"
+          );
+          if (timelineCanvas) {
+            const timelineCtx = timelineCanvas.getContext("2d");
+            const timelineData = visData.timeline || [];
+
+            if (timelineData.length > 0) {
+              // Step 1: Aggregate article counts per day
+              const countsPerDay = timelineData.reduce((acc, event) => {
+                if (typeof event === "string") {
+                  const day = event.split("T")[0];
+                  acc[day] = (acc[day] || 0) + 1;
+                }
+                return acc;
+              }, {});
+
+              // Step 2: Format data for the 'time' scale: [{x: Date, y: count}]
+              const chartData = Object.keys(countsPerDay)
+                .map((day) => ({
+                  x: new Date(day),
+                  y: countsPerDay[day],
+                }))
+                .sort((a, b) => a.x - b.x); // Sort chronologically
+
+              timelineChartInstance = new Chart(timelineCtx, {
+                type: "line",
+                data: {
+                  datasets: [
+                    {
+                      label: "Articles Published",
+                      data: chartData,
+                      fill: true,
+                      backgroundColor: "rgba(75, 192, 192, 0.2)",
+                      borderColor: "rgb(75, 192, 192)",
+                      borderWidth: 3,
+                      tension: 0.4,
+                      pointBackgroundColor: "rgb(75, 192, 192)",
+                      pointBorderColor: "#fff",
+                      pointBorderWidth: 2,
+                      pointRadius: 5,
+                    },
+                  ],
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    x: {
+                      type: "time",
+                      time: {
+                        unit: "day",
+                        tooltipFormat: "MMM dd, yyyy",
+                        displayFormats: {
+                          day: "MMM dd",
+                        },
+                      },
+                      title: {
+                        display: true,
+                        text: "Publication Date",
+                      },
+                      grid: {
+                        color: "rgba(0, 0, 0, 0.1)",
+                      },
+                    },
+                    y: {
+                      beginAtZero: true,
+                      title: {
+                        display: true,
+                        text: "Number of Articles",
+                      },
+                      ticks: {
+                        stepSize: 1,
+                      },
+                      grid: {
+                        color: "rgba(0, 0, 0, 0.1)",
+                      },
+                    },
+                  },
+                  plugins: {
+                    legend: {
+                      display: false,
+                    },
+                    tooltip: {
+                      mode: "index",
+                      intersect: false,
+                    },
+                  },
+                  interaction: {
+                    mode: "nearest",
+                    axis: "x",
+                    intersect: false,
+                  },
+                },
+              });
+            } else {
+              timelineCtx.font = "16px Arial";
+              timelineCtx.textAlign = "center";
+              timelineCtx.fillText(
+                "No timeline data available",
+                timelineCanvas.width / 2,
+                timelineCanvas.height / 2
+              );
+            }
+          }
+        }
+      });
+    </script>
   </body>
 </html>

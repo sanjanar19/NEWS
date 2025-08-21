@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   function displayResults(query, data) {
-    // Inject the main results HTML structure
+    // Inject the main results HTML structure, including the chart containers
     results.innerHTML = `
         <div class="results-header">
             <h2>Results for "${query}"</h2>
@@ -98,7 +98,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const sourceCtx = document
       .getElementById("sourceBreakdownChart")
       .getContext("2d");
-    const sourceData = visData.source_breakdown;
+    const sourceData = visData.source_breakdown || {};
     sourceChartInstance = new Chart(sourceCtx, {
       type: "bar",
       data: {
@@ -138,36 +138,38 @@ document.addEventListener("DOMContentLoaded", function () {
       },
     });
 
-    // 2. Publication Timeline (Line Graph)
+    // 2. Publication Timeline (Line Graph) - FULLY CORRECTED
     const timelineCtx = document
       .getElementById("publicationTimelineChart")
       .getContext("2d");
-    const timelineData = visData.timeline;
+    const timelineData = visData.timeline || [];
 
-    // Convert timeline data to a format Chart.js understands
-    const timelinePoints = timelineData.map((event) => ({
-      x: new Date(event.timestamp),
-      y: 1, // We can just plot occurrences. For a better view, we'd need to aggregate.
-    }));
-
-    // Aggregate counts per day for a cleaner graph
+    // Step 1: Aggregate article counts per day
     const countsPerDay = timelineData.reduce((acc, event) => {
-      const day = event.timestamp.split("T")[0]; // Get YYYY-MM-DD
-      acc[day] = (acc[day] || 0) + 1;
+      if (typeof event === "string") {
+        const day = event.split("T")[0];
+        acc[day] = (acc[day] || 0) + 1;
+      }
       return acc;
     }, {});
 
-    const sortedDays = Object.keys(countsPerDay).sort();
+    // Step 2: Format data for the 'time' scale: [{x: Date, y: count}]
+    const chartData = Object.keys(countsPerDay)
+      .map((day) => ({
+        x: new Date(day),
+        y: countsPerDay[day],
+      }))
+      .sort((a, b) => a.x - b.x); // Sort chronologically
 
     timelineChartInstance = new Chart(timelineCtx, {
       type: "line",
       data: {
-        labels: sortedDays,
         datasets: [
           {
             label: "Number of Articles Published",
-            data: sortedDays.map((day) => countsPerDay[day]),
-            fill: false,
+            data: chartData,
+            fill: true,
+            backgroundColor: "rgba(75, 192, 192, 0.2)",
             borderColor: "rgb(75, 192, 192)",
             tension: 0.1,
           },
@@ -181,6 +183,9 @@ document.addEventListener("DOMContentLoaded", function () {
             time: {
               unit: "day",
               tooltipFormat: "MMM dd, yyyy",
+              displayFormats: {
+                day: "MMM dd",
+              },
             },
             title: {
               display: true,
@@ -194,12 +199,14 @@ document.addEventListener("DOMContentLoaded", function () {
               text: "Number of Articles",
             },
             ticks: {
-              stepSize: 1, // Ensure y-axis has integer steps
+              stepSize: 1,
             },
           },
         },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: false,
+          },
         },
       },
     });
